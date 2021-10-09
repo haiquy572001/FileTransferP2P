@@ -1,14 +1,5 @@
 <template>
   <div>
-    <!--h3>Your id is : {{ idPerson }}</h3>
-    <hr style="width: 500px" />
-    <h2>Connect to Person id</h2>
-    <input type="text" v-model="idConnect" />
-    <button @click="callConnect">Connect</button>
-    <hr style="width: 500px" />
-    <h2>Send Messages</h2>
-    <input type="text" v-model="sendMessage">
-    <button @click="send">Send</button-->
     <div class="about-section">
       <h1>File Transfer P2P</h1>
       <p>Fast, convenient and private for sharing files to everybody</p>
@@ -18,8 +9,8 @@
         <div class="card" style="background-color: #96d4d4">
           <div class="container">
             <h2 class="name-app">My ID</h2>
-            <hr>
-            <h1 style="color: black">{{idPerson}}</h1>
+            <hr />
+            <h1 style="color: black">{{ idPerson }}</h1>
           </div>
         </div>
       </div>
@@ -27,7 +18,7 @@
         <div class="card" style="background-color: #ffc0c7">
           <div class="container">
             <h2 class="name-app">Connect to ID</h2>
-            <input type="text" class="textInput" v-model="idConnect"/>
+            <input type="text" class="textInput" v-model="idConnect" />
             <p>
               <button class="button" @click="callConnect">Connect</button>
             </p>
@@ -38,7 +29,13 @@
         <div class="card" style="background-color: #dfd9d8">
           <div class="container">
             <h2 class="name-app">Transfer</h2>
-            <input type="text" class="textInput" v-model="sendMessage"/>
+            <!--input type="text" class="textInput" v-model="sendMessage" /-->
+            <input
+              type="file"
+              id="fileSend"
+              style="color: black"
+              @change="handleFileInputChange"
+            />
             <p>
               <button @click="send" class="button">Send</button>
             </p>
@@ -58,12 +55,6 @@ const connection = new RTCPeerConnection({
   iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
 });
 
-connection.ondatachannel = (event) => {
-  console.log("ondatachannel");
-  channel = event.channel;
-  channel.onmessage = (event) => alert(event.data);
-};
-
 export default {
   data() {
     return {
@@ -71,6 +62,9 @@ export default {
       idConnect: null,
       icePerson: "",
       sendMessage: "",
+
+      receiveBuffer: [],
+      receiveMessage: null,
     };
   },
 
@@ -115,6 +109,49 @@ export default {
         connection.setRemoteDescription(answer);
       }
     };
+
+    connection.ondatachannel = (event) => {
+      channel = event.channel;
+      channel.onmessage = (event) => {
+        try {
+          if (JSON.parse(event.data)) {
+            this.receiveMessage = JSON.parse(event.data);
+            console.log("init message");
+            console.log(this.receiveMessage);
+            this.receiveMessage.sizeReceived = 0;
+            return;
+          }
+        } catch {}
+
+        if (this.receiveMessage.type == "InitMessage") {
+          this.receiveBuffer.push(event.data);
+          console.log(event.data.size);
+          this.receiveMessage.sizeReceived += event.data.size;
+
+          if (this.receiveMessage.sizeReceived == this.receiveMessage.size){
+            const received = new Blob(this.receiveBuffer);
+            //downloadAnchor.href = URL.createObjectURL(received);
+
+            let downloadLink = document.createElement("a");
+
+            downloadLink.download = this.receiveMessage.name;
+
+            downloadLink.innerHTML = "Download File";
+            downloadLink.href = URL.createObjectURL(received);
+            downloadLink.style.display = "none";
+            document.body.appendChild(downloadLink);
+
+            downloadLink.click();
+            downloadLink.remove();
+            this.receiveBuffer = [];
+          }
+        }
+        //receiveBuffer.push(event.data);
+
+        //const received = new Blob(receiveBuffer);
+        //downloadAnchor.href = URL.createObjectURL(received);
+      };
+    };
   },
 
   methods: {
@@ -147,9 +184,43 @@ export default {
         });
     },
     send() {
-      channel.send(this.sendMessage);
-      this.sendMessage = "";
+      //channel.send(this.sendMessage);
+      //this.sendMessage = "";
+      let fileInput = document.getElementById("fileSend");
+      const file = fileInput.files[0];
+      let initMessage = {
+        type: "InitMessage",
+        name: file.name,
+        size: file.size,
+      };
+      channel.send(JSON.stringify(initMessage));
+
+      const chunkSize = 16384;
+      let fileReader = new FileReader();
+      let offset = 0;
+      fileReader.addEventListener("error", (error) =>
+        console.error("Error reading file:", error)
+      );
+      fileReader.addEventListener("abort", (event) =>
+        console.log("File reading aborted:", event)
+      );
+      fileReader.addEventListener("load", (e) => {
+        console.log("FileRead.onload ", e);
+        channel.send(e.target.result);
+        offset += e.target.result.byteLength;
+        if (offset < file.size) {
+          readSlice(offset);
+        }
+      });
+      const readSlice = (o) => {
+        console.log("readSlice ", o);
+        const slice = file.slice(offset, o + chunkSize);
+        fileReader.readAsArrayBuffer(slice);
+      };
+      readSlice(0);
     },
+
+    async handleFileInputChange() {},
   },
 };
 </script>
