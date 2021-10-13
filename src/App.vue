@@ -48,7 +48,7 @@
 
 <script>
 import axios from "axios";
-let conWs = new WebSocket("ws://localhost:3000/");
+let conWs = new WebSocket("ws://gammazeta.herokuapp.com/");
 
 let channel = null;
 const connection = new RTCPeerConnection({
@@ -170,7 +170,7 @@ export default {
 
     async callApi(type) {
       await axios
-        .post("http://localhost:3000", {
+        .post("https://gammazeta.herokuapp.com/", {
           idPerson: this.idPerson,
           icePerson: this.icePerson,
           idConnect: this.idConnect,
